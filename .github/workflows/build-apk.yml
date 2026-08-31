@@ -18,6 +18,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
       - name: Extract project
         shell: bash
         run: |
@@ -30,15 +35,14 @@ jobs:
       - name: Build debug APK
         shell: bash
         run: |
-          PROJECT_DIR="$(find extracted -type f -name gradlew -printf '%h\n' | head -n 1)"
+          PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
           if [ -z "$PROJECT_DIR" ]; then
-            echo "gradlew not found in extracted project"
+            echo "Gradle project not found"
             exit 2
           fi
           echo "Project directory: $PROJECT_DIR"
           cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
           find . -type f -name '*.apk' -print
 
       - name: Upload APK
