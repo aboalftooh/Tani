@@ -1,4 +1,4 @@
-name: Diagnose Auth
+name: Build Test APK
 
 on:
   pull_request:
@@ -6,18 +6,60 @@ on:
   workflow_dispatch:
 
 jobs:
-  diagnose:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect auth navigation
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Prepare test build
         shell: bash
         run: |
           rm -rf extracted && mkdir extracted
           unzip -q tani_next_release_fixed.zip -d extracted
           PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
-          for f in \
-            "$PROJECT_DIR/app/src/main/java/com/tani/app/ui/auth/AuthFragment.kt" \
-            "$PROJECT_DIR/app/src/main/java/com/tani/app/MainActivity.kt"; do
-            echo "===== $f ====="; cat "$f"; done
-          find "$PROJECT_DIR/app/src/main/res" -type f \( -path '*/navigation/*' -o -name '*auth*.xml' -o -name 'activity_main.xml' \) -print -exec sh -c 'echo "===== $1 ====="; cat "$1"' _ {} \;
+          export PROJECT_DIR
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path(os.environ['PROJECT_DIR'])
+
+          repo = root / 'app/src/main/java/com/tani/app/data/Repository.kt'
+          text = repo.read_text()
+          text = text.replace('):List<Product>=', '): List<Product> = ')
+          text = text.replace('):List<OrderItem>=', '): List<OrderItem> = ')
+          repo.write_text(text)
+
+          supa = root / 'app/src/main/java/com/tani/app/data/Supabase.kt'
+          text = supa.read_text()
+          text = text.replace('import io.ktor.client.request.contentType\n', '')
+          text = text.replace('import io.ktor.http.ContentType\n', 'import io.ktor.http.ContentType\nimport io.ktor.http.contentType\nimport io.ktor.http.isSuccess\n')
+          text = text.replace(' var token:String? get()=prefs.getString("access_token",null) set(v)=prefs.edit().putString("access_token",v).apply()', ' var token:String?\n  get()=prefs.getString("access_token",null)\n  set(v){prefs.edit().putString("access_token",v).apply()}')
+          text = text.replace(' var userId:String? get()=prefs.getString("user_id",null) set(v)=prefs.edit().putString("user_id",v).apply()', ' var userId:String?\n  get()=prefs.getString("user_id",null)\n  set(v){prefs.edit().putString("user_id",v).apply()}')
+          supa.write_text(text)
+
+          main = root / 'app/src/main/java/com/tani/app/MainActivity.kt'
+          text = main.read_text()
+          old = 'if(Supabase.token==null)showAuth()else showApp()'
+          new = 'if(BuildConfig.DEBUG)showApp()else if(Supabase.token==null)showAuth()else showApp()'
+          if old not in text:
+              raise SystemExit('MainActivity entry point not found')
+          main.write_text(text.replace(old, new))
+          PY
+      - name: Build APK
+        shell: bash
+        run: |
+          PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
+          cd "$PROJECT_DIR"
+          gradle assembleDebug -Pkotlin.jvm.target.validation.mode=warning --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/Tani-test-debug.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tani-test-apk
+          path: Tani-test-debug.apk
+          if-no-files-found: error
