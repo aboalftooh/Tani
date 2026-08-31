@@ -46,10 +46,9 @@ jobs:
           main = root / 'app/src/main/java/com/tani/app/MainActivity.kt'
           text = main.read_text()
           old = 'if(Supabase.token==null)showAuth()else showApp()'
-          new = 'if(BuildConfig.DEBUG)showApp()else if(Supabase.token==null)showAuth()else showApp()'
           if old not in text:
               raise SystemExit('MainActivity entry point not found')
-          main.write_text(text.replace(old, new))
+          main.write_text(text.replace(old, 'showApp()'))
           PY
       - name: Build APK
         shell: bash
