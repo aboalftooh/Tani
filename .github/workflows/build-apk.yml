@@ -1,4 +1,4 @@
-name: Build APK
+name: Diagnose Auth
 
 on:
   pull_request:
@@ -6,67 +6,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Extract, inspect, and repair project
+      - uses: actions/checkout@v4
+      - name: Inspect auth navigation
         shell: bash
         run: |
-          rm -rf extracted
-          mkdir extracted
+          rm -rf extracted && mkdir extracted
           unzip -q tani_next_release_fixed.zip -d extracted
           PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
-          echo '===== AuthFragment.kt ====='
-          cat "$PROJECT_DIR/app/src/main/java/com/tani/app/ui/auth/AuthFragment.kt"
-          echo '===== MainActivity.kt ====='
-          cat "$PROJECT_DIR/app/src/main/java/com/tani/app/MainActivity.kt"
-          echo '===== navigation/resources ====='
-          find "$PROJECT_DIR/app/src/main/res" -type f \( -name '*nav*' -o -name '*auth*' -o -name 'activity_main.xml' \) -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \;
-          export PROJECT_DIR
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          root = Path(os.environ['PROJECT_DIR'])
-
-          repo = root / 'app/src/main/java/com/tani/app/data/Repository.kt'
-          s = repo.read_text()
-          s = s.replace('):List<Product>=', '): List<Product> = ')
-          s = s.replace('):List<OrderItem>=', '): List<OrderItem> = ')
-          repo.write_text(s)
-
-          supa = root / 'app/src/main/java/com/tani/app/data/Supabase.kt'
-          s = supa.read_text()
-          s = s.replace('import io.ktor.client.request.contentType\n', '')
-          s = s.replace('import io.ktor.http.ContentType\n', 'import io.ktor.http.ContentType\nimport io.ktor.http.contentType\nimport io.ktor.http.isSuccess\n')
-          s = s.replace(' var token:String? get()=prefs.getString("access_token",null) set(v)=prefs.edit().putString("access_token",v).apply()', ''' var token:String?\n  get()=prefs.getString("access_token",null)\n  set(v){prefs.edit().putString("access_token",v).apply()}''')
-          s = s.replace(' var userId:String? get()=prefs.getString("user_id",null) set(v)=prefs.edit().putString("user_id",v).apply()', ''' var userId:String?\n  get()=prefs.getString("user_id",null)\n  set(v){prefs.edit().putString("user_id",v).apply()}''')
-          supa.write_text(s)
-          PY
-
-      - name: Build debug APK
-        shell: bash
-        run: |
-          PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
-          cd "$PROJECT_DIR"
-          gradle assembleDebug -Pkotlin.jvm.target.validation.mode=warning --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: tani-apk-inspect
-          path: extracted/**/*.apk
-          if-no-files-found: error
+          for f in \
+            "$PROJECT_DIR/app/src/main/java/com/tani/app/ui/auth/AuthFragment.kt" \
+            "$PROJECT_DIR/app/src/main/java/com/tani/app/MainActivity.kt"; do
+            echo "===== $f ====="; cat "$f"; done
+          find "$PROJECT_DIR/app/src/main/res" -type f \( -path '*/navigation/*' -o -name '*auth*.xml' -o -name 'activity_main.xml' \) -print -exec sh -c 'echo "===== $1 ====="; cat "$1"' _ {} \;
