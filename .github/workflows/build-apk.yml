@@ -23,13 +23,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract and repair project
+      - name: Extract, inspect, and repair project
         shell: bash
         run: |
           rm -rf extracted
           mkdir extracted
           unzip -q tani_next_release_fixed.zip -d extracted
           PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
+          echo '===== AuthFragment.kt ====='
+          cat "$PROJECT_DIR/app/src/main/java/com/tani/app/ui/auth/AuthFragment.kt"
+          echo '===== MainActivity.kt ====='
+          cat "$PROJECT_DIR/app/src/main/java/com/tani/app/MainActivity.kt"
+          echo '===== navigation/resources ====='
+          find "$PROJECT_DIR/app/src/main/res" -type f \( -name '*nav*' -o -name '*auth*' -o -name 'activity_main.xml' \) -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \;
           export PROJECT_DIR
           python3 - <<'PY'
           import os
@@ -57,11 +63,10 @@ jobs:
           PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
           cd "$PROJECT_DIR"
           gradle assembleDebug -Pkotlin.jvm.target.validation.mode=warning --stacktrace
-          find . -type f -name '*.apk' -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: tani-apk
+          name: tani-apk-inspect
           path: extracted/**/*.apk
           if-no-files-found: error
