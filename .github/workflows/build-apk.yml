@@ -1,4 +1,4 @@
-name: Build APK
+name: Diagnose Tani Sources
 
 on:
   pull_request:
@@ -6,48 +6,24 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  diagnose:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Extract project
+      - name: Inspect broken sources
         shell: bash
         run: |
           rm -rf extracted
           mkdir extracted
           unzip -q tani_next_release_fixed.zip -d extracted
-          echo "Extracted files:"
-          find extracted -maxdepth 3 -type f | sort | head -200
-
-      - name: Build debug APK
-        shell: bash
-        run: |
           PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "Gradle project not found"
-            exit 2
-          fi
-          echo "Project directory: $PROJECT_DIR"
-          cd "$PROJECT_DIR"
-          gradle assembleDebug -Pkotlin.jvm.target.validation.mode=warning --stacktrace
-          find . -type f -name '*.apk' -print
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: tani-apk
-          path: extracted/**/*.apk
-          if-no-files-found: error
+          echo '===== app/build.gradle.kts ====='
+          cat "$PROJECT_DIR/app/build.gradle.kts"
+          echo '===== Repository.kt ====='
+          cat "$PROJECT_DIR/app/src/main/java/com/tani/app/data/Repository.kt"
+          echo '===== Supabase.kt ====='
+          cat "$PROJECT_DIR/app/src/main/java/com/tani/app/data/Supabase.kt"
+          echo '===== Kotlin file list ====='
+          find "$PROJECT_DIR/app/src/main/java" -type f -name '*.kt' | sort
