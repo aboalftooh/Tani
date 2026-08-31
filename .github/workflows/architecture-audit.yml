@@ -9,25 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect project structure and source
+      - name: Inspect project docs and backend schema
         shell: bash
         run: |
           rm -rf extracted && mkdir extracted
           unzip -q tani_next_release_fixed.zip -d extracted
           PROJECT_DIR="$(find extracted -type f -name settings.gradle.kts -printf '%h\n' | head -n 1)"
-          echo '===== TREE ====='
-          find "$PROJECT_DIR" -maxdepth 6 -type f | sort
-          echo '===== GRADLE FILES ====='
-          for f in "$PROJECT_DIR/settings.gradle.kts" "$PROJECT_DIR/build.gradle.kts" "$PROJECT_DIR/app/build.gradle.kts" "$PROJECT_DIR/gradle.properties"; do
+          for f in "$PROJECT_DIR/README.md" "$PROJECT_DIR/IMPLEMENTATION_STATUS.md" "$PROJECT_DIR/GRADLE_SETUP.txt" "$PROJECT_DIR/supabase/schema.sql" "$PROJECT_DIR/supabase/seed_demo.sql" "$PROJECT_DIR/app/src/main/AndroidManifest.xml"; do
             [ -f "$f" ] && { echo "===== $f ====="; cat "$f"; }
-          done
-          echo '===== KOTLIN SOURCE ====='
-          find "$PROJECT_DIR/app/src/main/java" -type f -name '*.kt' -print0 | sort -z | while IFS= read -r -d '' f; do
-            echo "===== $f ====="
-            cat "$f"
-          done
-          echo '===== RELEVANT RESOURCES ====='
-          find "$PROJECT_DIR/app/src/main/res" -type f \( -path '*/layout/*' -o -path '*/menu/*' -o -path '*/values/*' -o -path '*/navigation/*' \) -print0 | sort -z | while IFS= read -r -d '' f; do
-            echo "===== $f ====="
-            cat "$f"
           done
